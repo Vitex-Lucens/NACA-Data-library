@@ -1,0 +1,162 @@
+# NACAData.jl - AI Context File
+
+## Project Overview
+NACAData.jl is a Julia package providing fast aerodynamic performance lookup tables for NACA airfoils. It eliminates the need for computationally expensive panel methods by using pre-computed experimental data from NACA technical reports.
+
+**Key Value Proposition:** 1000x faster than panel methods for standard NACA airfoil analysis.
+
+## Project Status
+- **Version:** 0.1.0 (MVP)
+- **Status:** Development - Core functionality complete, needs real experimental data
+- **License:** MIT
+- **Language:** Julia 1.6+
+
+## Architecture
+
+### Package Structure
+```
+NACAData/
+├── src/
+│   ├── NACAData.jl          # Main module, exports public API
+│   ├── types.jl             # Data structures (NACAPerformance, NACADataTable)
+│   ├── data_loader.jl       # NACA database storage and initialization
+│   ├── interpolation.jl     # Bilinear interpolation for Re and alpha
+│   └── api.jl               # Public API functions
+├── test/
+│   └── runtests.jl          # Test suite (14 tests, all passing)
+├── examples/
+│   └── basic_usage.jl       # Usage examples
+├── data/                    # (Future) Raw NACA data files
+└── docs/                    # (Future) Documentation
+```
+
+### Core Components
+
+**1. Data Structures (`types.jl`)**
+- `NACAPerformance`: Output struct with cl_ND, cd_ND, cm_ND, alpha_RAD, reynolds_ND, naca_code_STR
+- `NACADataTable`: Internal storage for tabulated data with interpolation grids
+
+**2. Database (`data_loader.jl`)**
+- `NACA_DATABASE`: Global Dict{String, NACADataTable}
+- `load_naca_XXXX_data!()`: Functions to load each airfoil
+- `initialize_database!()`: Called on module load
+- Currently has NACA 0012 with simplified placeholder data
+
+**3. Interpolation (`interpolation.jl`)**
+- Uses `Interpolations.jl` for bilinear interpolation
+- Interpolates over Reynolds number and angle of attack
+- Flat extrapolation at boundaries with warnings
+
+**4. Public API (`api.jl`)**
+- `get_naca_performance(naca_code_STR, reynolds_ND, alpha_RAD)`: Main function
+- `list_available_airfoils()`: Returns available NACA codes
+- Throws ArgumentError for unavailable airfoils
+
+## Naming Conventions
+Follows Vitex Lucens Julia coding standards:
+- Variables: `snake_case` with unit suffixes
+  - `_ND`: Dimensionless (Reynolds number, coefficients)
+  - `_RAD`: Radians (angle of attack)
+  - `_M`: Meters
+  - `_STR`: String
+- Functions: `snake_case_fnc` (e.g., `get_naca_performance`)
+- Types: `CamelCase` (e.g., `NACAPerformance`)
+- Constants: `UPPERCASE` (e.g., `NACA_DATABASE`)
+
+## Dependencies
+- `Interpolations.jl` (v0.14, 0.15): For bilinear interpolation
+- `Test.jl` (stdlib): For testing
+
+## Current Limitations
+1. **Placeholder Data**: NACA 0012 uses simplified aerodynamic models, not real experimental data
+2. **Limited Coverage**: Only one airfoil currently available
+3. **Deprecation Warning**: Uses old `LinearInterpolation` API (needs update to `linear_interpolation`)
+
+## Priority Tasks
+1. **Add Real NACA 0012 Data** (HIGH)
+   - Source: Abbott & von Doenhoff (1959), NACA Report 824
+   - Replace simplified models in `load_naca_0012_data!()`
+   
+2. **Add More Airfoils** (MEDIUM)
+   - NACA 0009, 0015, 0018, 0021 (symmetric)
+   - Follow same pattern as NACA 0012
+
+3. **Fix Deprecation** (LOW)
+   - Update `interpolation.jl` to use `linear_interpolation`
+
+## Data Format Requirements
+When adding new airfoil data:
+- Reynolds numbers: `Vector{Float64}` (e.g., [5e4, 1e5, 2e5, 5e5, 1e6])
+- Angles of attack: `Vector{Float64}` in radians (use `deg2rad.()`)
+- Coefficients: `Matrix{Float64}` with dimensions [n_alpha, n_reynolds]
+- Always include source citation string
+
+## Testing Strategy
+All new airfoils must have tests:
+- Basic functionality (returns correct struct)
+- Physical constraints (Cd > 0, etc.)
+- Symmetric airfoil properties (Cl ≈ 0 at α = 0)
+- Known values from literature (if available)
+
+## Usage Example
+```julia
+using NACAData
+
+# Get performance at specific conditions
+result = get_naca_performance("0012", 1e5, deg2rad(5))
+println("Cl = ", result.cl_ND)  # Lift coefficient
+println("Cd = ", result.cd_ND)  # Drag coefficient
+println("L/D = ", result.cl_ND / result.cd_ND)
+
+# List available airfoils
+available = list_available_airfoils()  # ["0012"]
+```
+
+## Data Sources
+Planned sources for experimental data:
+1. Abbott & von Doenhoff - "Theory of Wing Sections" (1959)
+2. NACA Technical Reports (public domain, pre-1958)
+3. UIUC Airfoil Database (with citation)
+4. NASA Technical Reports
+
+## Future Roadmap
+- **v0.2.0**: Cambered airfoils, stall prediction, plotting
+- **v0.3.0**: NACA 5-digit and 6-series
+- **v1.0.0**: Register in Julia General registry
+
+## Development Workflow
+1. Add data in `src/data_loader.jl`
+2. Add tests in `test/runtests.jl`
+3. Run `Pkg.test()` to verify
+4. Update README.md
+5. Commit with descriptive message
+
+## Key Files to Understand
+- `src/NACAData.jl`: Entry point, see module structure
+- `src/data_loader.jl`: Add new airfoils here
+- `NEXT_STEPS.md`: Detailed roadmap and data collection guide
+- `CONTRIBUTING.md`: Guidelines for contributors
+
+## Performance Characteristics
+- **Lookup time**: ~1ms (vs. seconds for panel methods)
+- **Memory**: Minimal (pre-computed tables)
+- **Accuracy**: Depends on source data quality and interpolation
+
+## Common Issues
+1. **Extrapolation warnings**: Occurs when Re or alpha outside data range
+2. **Missing airfoil**: Check `list_available_airfoils()` for available codes
+3. **Deprecation warning**: Known issue, will be fixed in next update
+
+## Related Projects
+- `AirfoilDatabase.jl`: Geometry only (coordinates)
+- `FLOWFoil.jl`: Panel methods (slower but more flexible)
+- `Xfoil.jl`: XFOIL wrapper (computational)
+
+## Contact
+- Author: Tahu Balfour
+- License: MIT
+- Repository: (To be created on GitHub)
+
+---
+Last Updated: 2026-03-13
+Package Version: 0.1.0
